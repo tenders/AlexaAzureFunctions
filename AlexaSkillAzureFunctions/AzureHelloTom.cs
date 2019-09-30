@@ -76,12 +76,18 @@ namespace AlexaSkillAzureFunctions
                             }
                     }
 
+                    string title = "Geburtstag von " + name;
+                    string response = string.Empty;
                     if(string.IsNullOrEmpty(geburtstag))
                     {
-                        return ResponseBuilder.Tell("Kehne Ahnung");
+                        response = "Keeehne Ahnung";
+
+                        return ResponseBuilder.TellWithCard(response, title, response);
+
                     }
 
-                    return ResponseBuilder.Tell($"{name} hat am {geburtstag} Geburtstag.");
+                    response = $"{name} hat am {geburtstag} Geburtstag.";
+                    return ResponseBuilder.TellWithCard(response, title, response);
                 }
             }
 
