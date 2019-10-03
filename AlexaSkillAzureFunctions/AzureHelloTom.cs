@@ -11,6 +11,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET;
 using Alexa.NET.Response;
 using Alexa.NET.Request;
+using System.Collections.Generic;
 
 namespace AlexaSkillAzureFunctions
 {
@@ -26,7 +27,9 @@ namespace AlexaSkillAzureFunctions
             var skillRequest = JsonConvert.DeserializeObject<SkillRequest>(payload);
 
             Session session = skillRequest.Session;
-            
+            if (session.Attributes == null)
+                session.Attributes = new Dictionary<string, object>();
+
             // get type of request
             var requestType = skillRequest.GetRequestType();
 
@@ -54,8 +57,28 @@ namespace AlexaSkillAzureFunctions
                     return ProcessBirthdayIntentRequest(intentRequest, session);
                 }
 
-                return ResponseBuilder.TellWithCard("Ciao.", "Unbekannter IntentRequest", intentRequest.Intent.Name);
-            }
+                string reqName = intentRequest.Intent.Name;
+                if (reqName.ToLowerInvariant().Contains("repeatintent"))
+                {
+                    string repeatText;
+                    string repeatCardText = intentRequest.Intent.Name;
+                    if (session.Attributes != null && session.Attributes.ContainsKey("lastSpeech"))
+                    {
+                        repeatCardText = session.Attributes["lastSpeech"].ToString();
+                        repeatText = repeatCardText;
+
+                    }
+                    else
+                    {
+                        repeatText = "Kenne ich nicht.";
+                    }
+                    
+                    return ResponseBuilder.TellWithCard(repeatText, "RepeatRequest", repeatCardText );
+                }
+
+                string respText = "Intent " + intentRequest.Intent.Name;
+                return ResponseBuilder.TellWithCard(respText, "Unbekannter IntentRequest", intentRequest.Intent.Name);
+            }          
 
             // default response
             string cardTitle = "Ciao";
@@ -109,20 +132,27 @@ namespace AlexaSkillAzureFunctions
             }
 
             response = $"{name} hat am {geburtstag} Geburtstag."; // + Environment.NewLine + session.SessionId;
-            var speech = new SsmlOutputSpeech();
-            speech.Ssml = "<speak>Das ist meine antwort</speak>";
+            if (!session.Attributes.ContainsKey("lastSpeech"))
+            {
+                session.Attributes.Add("lastSpeech", response);
+            }
+            else
+            {
+                session.Attributes["lastSpeech"] = response;
+            }   
             var respMessage = new PlainTextOutputSpeech();
             respMessage.Text = response;
 
             ResponseBody body = new ResponseBody();
             body.OutputSpeech = respMessage;
-            //body.ShouldEndSession = false;
+            body.ShouldEndSession = false;
             body.Card = new SimpleCard { Title = title, Content = response };
 
             //SkillResponse resp = ResponseBuilder.TellWithCard(response, title, response);
             SkillResponse resp = new SkillResponse();
             resp.Response = body;
             resp.Version = "1.0";
+            resp.SessionAttributes = session.Attributes;
             return resp;
         }
     }
