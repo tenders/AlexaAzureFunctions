@@ -25,6 +25,8 @@ namespace AlexaSkillAzureFunctions
             var payload = await req.ReadAsStringAsync();
             var skillRequest = JsonConvert.DeserializeObject<SkillRequest>(payload);
 
+            Session session = skillRequest.Session;
+            
             // get type of request
             var requestType = skillRequest.GetRequestType();
 
@@ -35,6 +37,12 @@ namespace AlexaSkillAzureFunctions
                   .Tell("Hallo. Ich bin thomas erster alexa skill.");
             }
 
+            if (requestType == typeof(Alexa.NET.Request.Type.SessionEndedRequest))
+            {
+                return ResponseBuilder
+                  .Tell("Servus. Ich bin dann mal weg.");
+            }
+
             // handle intentrequest
             if (requestType == typeof(IntentRequest))
             {
@@ -43,56 +51,79 @@ namespace AlexaSkillAzureFunctions
                 // handle greetingintent
                 if (intentRequest.Intent.Name == "GetBirthday")
                 {
-                    var name = intentRequest.Intent.Slots["Name"].Value;
-                    string geburtstag = string.Empty;
-                    switch(name)
-                    {
-                        case "thomas":
-                        case "papa":
-                            {
-                                geburtstag = "17.08.";
-                                break;
-                            }
-                        case "bine":
-                        case "mama":
-                            {
-                                geburtstag = "31.03.";
-                                break;
-                            }
-                        case "zoe":
-                            {
-                                geburtstag = "29.03.";
-                                break;
-                            }
-                        case "kaja":
-                            {
-                                geburtstag = "10.04.";
-                                break;
-                            }
-                        default:
-                            {
-                                geburtstag = string.Empty;
-                                break;
-                            }
-                    }
-
-                    string title = "Geburtstag von " + name;
-                    string response = string.Empty;
-                    if(string.IsNullOrEmpty(geburtstag))
-                    {
-                        response = "Keeehne Ahnung";
-
-                        return ResponseBuilder.TellWithCard(response, title, response);
-
-                    }
-
-                    response = $"{name} hat am {geburtstag} Geburtstag.";
-                    return ResponseBuilder.TellWithCard(response, title, response);
+                    return ProcessBirthdayIntentRequest(intentRequest, session);
                 }
+
+                return ResponseBuilder.TellWithCard("Ciao.", "Unbekannter IntentRequest", intentRequest.Intent.Name);
             }
 
             // default response
-            return ResponseBuilder.Tell("Oops, da ist was schief gelaufen.");
+            string cardTitle = "Ciao";
+            string cardMessage = requestType.FullName;
+            return ResponseBuilder.TellWithCard("Oops, da ist was schief gelaufen.", cardTitle, cardMessage);
+        }
+
+        public static SkillResponse ProcessBirthdayIntentRequest(IntentRequest intentRequest, Session session)
+        {
+            var name = intentRequest.Intent.Slots["Name"].Value;
+            string geburtstag = string.Empty;
+            switch (name)
+            {
+                case "thomas":
+                case "papa":
+                    {
+                        geburtstag = "17.08.";
+                        break;
+                    }
+                case "bine":
+                case "mama":
+                    {
+                        geburtstag = "31.03.";
+                        break;
+                    }
+                case "zoe":
+                    {
+                        geburtstag = "29.03.";
+                        break;
+                    }
+                case "kaja":
+                    {
+                        geburtstag = "10.04.";
+                        break;
+                    }
+                default:
+                    {
+                        geburtstag = string.Empty;
+                        break;
+                    }
+            }
+
+            string title = session.SessionId + ": Geburtstag von " + name;
+            string response = string.Empty;
+            if (string.IsNullOrEmpty(geburtstag))
+            {
+                response = "Keeehne Ahnung";
+                SkillResponse kaResp = ResponseBuilder.TellWithCard(response, title, response);
+
+                return kaResp;
+            }
+
+            response = $"{name} hat am {geburtstag} Geburtstag."; // + Environment.NewLine + session.SessionId;
+            var speech = new SsmlOutputSpeech();
+            speech.Ssml = "<speak>Das ist meine antwort</speak>";
+            var respMessage = new PlainTextOutputSpeech();
+            respMessage.Text = response;
+
+            ResponseBody body = new ResponseBody();
+            body.OutputSpeech = respMessage;
+            //body.ShouldEndSession = false;
+            body.Card = new SimpleCard { Title = title, Content = response };
+
+            //SkillResponse resp = ResponseBuilder.TellWithCard(response, title, response);
+            SkillResponse resp = new SkillResponse();
+            resp.Response = body;
+            resp.Version = "1.0";
+            return resp;
         }
     }
 }
