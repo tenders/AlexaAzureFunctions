@@ -40,12 +40,6 @@ namespace AlexaSkillAzureFunctions
                   .Tell("Hallo. Ich bin thomas erster alexa skill.");
             }
 
-            if (requestType == typeof(Alexa.NET.Request.Type.SessionEndedRequest))
-            {
-                return ResponseBuilder
-                  .Tell("Servus. Ich bin dann mal weg.");
-            }
-
             // handle intentrequest
             if (requestType == typeof(IntentRequest))
             {
@@ -57,23 +51,27 @@ namespace AlexaSkillAzureFunctions
                     return ProcessBirthdayIntentRequest(intentRequest, session);
                 }
 
-                string reqName = intentRequest.Intent.Name;
-                if (reqName.ToLowerInvariant().Contains("repeatintent"))
-                {
-                    string repeatText;
-                    string repeatCardText = intentRequest.Intent.Name;
-                    if (session.Attributes != null && session.Attributes.ContainsKey("lastSpeech"))
-                    {
-                        repeatCardText = session.Attributes["lastSpeech"].ToString();
-                        repeatText = repeatCardText;
+                /// string reqName = intentRequest.Intent.Name;
+                /// if (reqName.ToLowerInvariant().Contains("repeatintent"))
+                if (intentRequest.Intent.Name == "AMAZON.RepeatIntent")
+                {                 
+                    return ProcessRepeatIntent(intentRequest, session);                    
+                }
 
-                    }
-                    else
-                    {
-                        repeatText = "Kenne ich nicht.";
-                    }
-                    
-                    return ResponseBuilder.TellWithCard(repeatText, "RepeatRequest", repeatCardText );
+                if (intentRequest.Intent.Name == "AMAZON.StopIntent" || intentRequest.Intent.Name == "AMAZON.NoIntent")
+                {
+                    string stopResponse = "Und Tschuess !";
+                    return CreateResponse(stopResponse, "Skill beendet", stopResponse, session, true);
+                }
+
+                if (intentRequest.Intent.Name == "AMAZON.YesIntent")
+                {
+                    string yesResponse = "Welchen Geburtstag soll ich dir sagen ?";
+                    var repromptMessage = new PlainTextOutputSpeech();
+                    repromptMessage.Text = "Soll ich dir noch einen Geburtstag sagen?";
+                    var repromptBody = new Reprompt();
+                    repromptBody.OutputSpeech = repromptMessage;
+                    return ResponseBuilder.Ask(yesResponse, repromptBody);
                 }
 
                 string respText = "Intent " + intentRequest.Intent.Name;
@@ -86,6 +84,12 @@ namespace AlexaSkillAzureFunctions
             return ResponseBuilder.TellWithCard("Oops, da ist was schief gelaufen.", cardTitle, cardMessage);
         }
 
+        /// <summary>
+        /// BirtdayIntent
+        /// </summary>
+        /// <param name="intentRequest"></param>
+        /// <param name="session"></param>
+        /// <returns></returns>
         public static SkillResponse ProcessBirthdayIntentRequest(IntentRequest intentRequest, Session session)
         {
             var name = intentRequest.Intent.Slots["Name"].Value;
@@ -126,9 +130,7 @@ namespace AlexaSkillAzureFunctions
             if (string.IsNullOrEmpty(geburtstag))
             {
                 response = "Keeehne Ahnung";
-                SkillResponse kaResp = ResponseBuilder.TellWithCard(response, title, response);
-
-                return kaResp;
+                return CreateResponse(response, title, response, session);
             }
 
             response = $"{name} hat am {geburtstag} Geburtstag."; // + Environment.NewLine + session.SessionId;
@@ -139,14 +141,86 @@ namespace AlexaSkillAzureFunctions
             else
             {
                 session.Attributes["lastSpeech"] = response;
-            }   
+            }
+
+            return CreateResponseWithReprompt(response, title, response, session);            
+        }
+
+        /// <summary>
+        /// AMAZON.RepeatIntent
+        /// </summary>
+        /// <param name="intentRequest"></param>
+        /// <param name="session"></param>
+        /// <returns>the response</returns>
+        private static SkillResponse ProcessRepeatIntent(IntentRequest intentRequest, Session session)
+        {
+            string repeatText;
+            string repeatCardText = intentRequest.Intent.Name;
+            if (session.Attributes != null && session.Attributes.ContainsKey("lastSpeech"))
+            {
+                repeatCardText = session.Attributes["lastSpeech"].ToString();
+                repeatText = repeatCardText;
+                return CreateResponseWithReprompt(repeatText, "RepeatRequest", repeatCardText, session);
+            }
+            else
+            {
+                repeatText = "Kenne ich nicht.";
+            }
+
+            return CreateResponse(repeatText, "RepeatRequest", repeatCardText, session);
+        }
+
+        /// <summary>
+        /// Creates a response object
+        /// </summary>
+        /// <param name="response"></param>
+        /// <param name="title"></param>
+        /// <param name="cardContent"></param>
+        /// <param name="session"></param>
+        /// <param name="endSession"></param>
+        /// <returns>the respnse</returns>
+        private static SkillResponse CreateResponse(string response, string title, string cardContent, Session session, Boolean endSession = false)
+        {
             var respMessage = new PlainTextOutputSpeech();
             respMessage.Text = response;
 
             ResponseBody body = new ResponseBody();
             body.OutputSpeech = respMessage;
+            body.ShouldEndSession = endSession;
+            body.Card = new SimpleCard { Title = title, Content = response };
+            
+            //SkillResponse resp = ResponseBuilder.TellWithCard(response, title, response);
+            SkillResponse resp = new SkillResponse();
+            resp.Response = body;
+            resp.Version = "1.0";
+            resp.SessionAttributes = session.Attributes;
+            return resp;
+        }
+
+        /// <summary>
+        /// Creates a response object
+        /// </summary>
+        /// <param name="response"></param>
+        /// <param name="title"></param>
+        /// <param name="cardContent"></param>
+        /// <param name="session"></param>
+        /// <param name="endSession"></param>
+        /// <returns>the respnse</returns>
+        private static SkillResponse CreateResponseWithReprompt(string response, string title, string cardContent, Session session)
+        {
+            var respMessage = new PlainTextOutputSpeech();
+            respMessage.Text = response;
+
+            var repromptMessage = new PlainTextOutputSpeech();
+            repromptMessage.Text = "Soll ich dir noch einen Geburtstag sagen?";
+            var repromptBody = new Reprompt();
+            repromptBody.OutputSpeech = repromptMessage;
+            
+            ResponseBody body = new ResponseBody();
+            body.OutputSpeech = respMessage;
             body.ShouldEndSession = false;
             body.Card = new SimpleCard { Title = title, Content = response };
+            body.Reprompt = repromptBody;
 
             //SkillResponse resp = ResponseBuilder.TellWithCard(response, title, response);
             SkillResponse resp = new SkillResponse();
